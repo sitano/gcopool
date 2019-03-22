@@ -57,18 +57,9 @@ func New(config Config) (*Pool, error) {
 		return nil, err
 	}
 	pool := &Pool{
-		db:            db,
 		valid:         true,
 		mayGetSession: make(chan struct{}),
 		Config:        config,
-		md:            md,
-	}
-	if config.HealthCheckWorkers == 0 {
-		// With 10 workers and assuming average latency of 5 ms for BeginTransaction, we will be able to
-		// prepare 2000 tx/sec in advance. If the rate of takeWriteSession is more than that, it will
-		// degrade to doing BeginTransaction inline.
-		// TODO: consider resizing the worker pool dynamically according to the load.
-		config.HealthCheckWorkers = 10
 	}
 	if config.HealthCheckInterval == 0 {
 		config.HealthCheckInterval = 5 * time.Minute
@@ -174,7 +165,7 @@ func createSession(ctx context.Context, sc sppb.SpannerClient, db string, labels
 			return e
 		}
 		// If no error, construct the new session.
-		s = &session{valid: true, client: sc, id: sid.Name, createTime: time.Now(), md: md}
+		s = &session{valid: true, res: sc, id: sid.Name, createTime: time.Now(), md: md}
 		return nil
 	})
 	if err != nil {

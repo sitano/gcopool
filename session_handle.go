@@ -56,14 +56,14 @@ func (sh *sessionHandle) getID() string {
 	return sh.session.getID()
 }
 
-// getClient gets the Cloud Spanner RPC client associated with the session ID in sessionHandle.
+// getClient gets the Cloud Spanner RPC resource associated with the session ID in sessionHandle.
 func (sh *sessionHandle) getClient() sppb.SpannerClient {
 	sh.mu.Lock()
 	defer sh.mu.Unlock()
 	if sh.session == nil {
 		return nil
 	}
-	return sh.session.client
+	return sh.session.res
 }
 
 // getMetadata returns the metadata associated with the session in sessionHandle.

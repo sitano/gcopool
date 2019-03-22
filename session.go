@@ -29,11 +29,11 @@ import (
 	"time"
 )
 
-// session wraps a Cloud Spanner session ID through which transactions are created and executed.
+// session wraps a resource session.
 type session struct {
-	// client is the RPC channel to Cloud Spanner. It is set only once during session's creation.
-	client sppb.SpannerClient
-	// id is the unique id of the session in Cloud Spanner. It is set only once during session's creation.
+	// resource is something that is managed by this session. It is set only once during session's creation.
+	res Resource
+	// id is the unique id of the session. It is set only once during session's creation.
 	id string
 	// pool is the session's home session pool where it was created. It is set only once during session's creation.
 	pool *Pool
@@ -53,10 +53,8 @@ type session struct {
 	nextCheck time.Time
 	// checkingHelath is true if currently this session is being processed by health checker. Must be modified under health checker lock.
 	checkingHealth bool
-	// md is the Metadata to be sent with each request.
-	md metadata.MD
-	// tx contains the transaction id if the session has been prepared for write.
-	tx transactionID
+	// tx is true if the session has been prepared for write.
+	tx bool
 }
 
 // isValid returns true if the session is still valid for use.
@@ -70,7 +68,7 @@ func (s *session) isValid() bool {
 func (s *session) isWritePrepared() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.tx != nil
+	return s.tx
 }
 
 // String implements fmt.Stringer for session.
@@ -86,7 +84,7 @@ func (s *session) ping() error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	return runRetryable(ctx, func(ctx context.Context) error {
-		_, err := s.client.GetSession(contextWithOutgoingMetadata(ctx, s.pool.md), &sppb.GetSessionRequest{Name: s.getID()}) // s.getID is safe even when s is invalid.
+		_, err := s.res.GetSession(contextWithOutgoingMetadata(ctx, s.pool.md), &sppb.GetSessionRequest{Name: s.getID()}) // s.getID is safe even when s is invalid.
 		return err
 	})
 }
@@ -125,8 +123,8 @@ func (s *session) setNextCheck(t time.Time) {
 	s.nextCheck = t
 }
 
-// setTransactionID sets the transaction id in the session
-func (s *session) setTransactionID(tx transactionID) {
+// setTransaction sets the transaction status (read / write) in the session
+func (s *session) setTransactionID(tx bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.tx = tx
@@ -139,8 +137,8 @@ func (s *session) getID() string {
 	return s.id
 }
 
-// getHcIndex returns the session's index into the global healthcheck priority queue.
-func (s *session) getHcIndex() int {
+// getHCIndex returns the session's index into the global health check priority queue.
+func (s *session) getHCIndex() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.hcIndex
@@ -153,7 +151,7 @@ func (s *session) getIdleList() *list.Element {
 	return s.idleList
 }
 
-// getNextCheck returns the timestamp for next healthcheck on the session.
+// getNextCheck returns the timestamp for next health check on the session.
 func (s *session) getNextCheck() time.Time {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -162,14 +160,14 @@ func (s *session) getNextCheck() time.Time {
 
 // recycle turns the session back to its home session pool.
 func (s *session) recycle() {
-	s.setTransactionID(nil)
+	s.setTransactionID(false)
 	if !s.pool.recycle(s) {
 		// s is rejected by its home session pool because it expired and the session pool currently has enough open sessions.
 		s.destroy(false)
 	}
 }
 
-// destroy removes the session from its home session pool, healthcheck queue and Cloud Spanner service.
+// destroy removes the session from its home session pool, health check queue and service.
 func (s *session) destroy(isExpire bool) bool {
 	// Remove s from session pool.
 	if !s.pool.remove(s, isExpire) {
@@ -188,7 +186,7 @@ func (s *session) delete(ctx context.Context) {
 	// Ignore the error returned by runRetryable because even if we fail to explicitly destroy the session,
 	// it will be eventually garbage collected by Cloud Spanner.
 	err := runRetryable(ctx, func(ctx context.Context) error {
-		_, e := s.client.DeleteSession(ctx, &sppb.DeleteSessionRequest{Name: s.getID()})
+		_, e := s.res.DeleteSession(ctx, &sppb.DeleteSessionRequest{Name: s.getID()})
 		return e
 	})
 	if err != nil {
@@ -201,7 +199,7 @@ func (s *session) prepareForWrite(ctx context.Context) error {
 	if s.isWritePrepared() {
 		return nil
 	}
-	tx, err := beginTransaction(ctx, s.getID(), s.client)
+	tx, err := beginTransaction(ctx, s.getID(), s.res)
 	if err != nil {
 		return err
 	}

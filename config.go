@@ -31,9 +31,9 @@ type Config struct {
 	// CreateResource is the caller supplied method for getting a session, this makes session pool able to use pooling.
 	CreateResource func() (Resource, error)
 	// MaxOpened is the maximum number of opened sessions allowed by the session
-	// pool. Defaults to NumChannels * 100. If the client tries to open a session and
+	// pool. Defaults to NumChannels * 100. If the resource tries to open a session and
 	// there are already MaxOpened sessions, it will block until one becomes
-	// available or the context passed to the client method is canceled or times out.
+	// available or the context passed to the resource method is canceled or times out.
 	MaxOpened uint64
 	// MinOpened is the minimum number of opened sessions that the session pool
 	// tries to maintain. Session pool won't continue to expire sessions if number

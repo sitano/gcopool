@@ -1,3 +1,23 @@
+/*
+Copyright 2017 Google LLC
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+Modifications:
+
+- 2019, @john.koepi/@sitano extract pool, removed spanner specific code
+*/
+
 package spanner
 
 import (
@@ -10,56 +30,17 @@ import (
 	"time"
 )
 
-// hcHeap implements heap.Interface. It is used to create the priority queue for session healthchecks.
-type hcHeap struct {
-	sessions []*session
-}
-
-// Len impelemnts heap.Interface.Len.
-func (h hcHeap) Len() int {
-	return len(h.sessions)
-}
-
-// Less implements heap.Interface.Less.
-func (h hcHeap) Less(i, j int) bool {
-	return h.sessions[i].getNextCheck().Before(h.sessions[j].getNextCheck())
-}
-
-// Swap implements heap.Interface.Swap.
-func (h hcHeap) Swap(i, j int) {
-	h.sessions[i], h.sessions[j] = h.sessions[j], h.sessions[i]
-	h.sessions[i].setHcIndex(i)
-	h.sessions[j].setHcIndex(j)
-}
-
-// Push implements heap.Interface.Push.
-func (h *hcHeap) Push(s interface{}) {
-	ns := s.(*session)
-	ns.setHcIndex(len(h.sessions))
-	h.sessions = append(h.sessions, ns)
-}
-
-// Pop implements heap.Interface.Pop.
-func (h *hcHeap) Pop() interface{} {
-	old := h.sessions
-	n := len(old)
-	s := old[n-1]
-	h.sessions = old[:n-1]
-	s.setHcIndex(-1)
-	return s
-}
-
-// healthChecker performs periodical healthchecks on registered sessions.
+// healthChecker performs periodical health checks on registered sessions.
 type healthChecker struct {
 	// mu protects concurrent access to hcQueue.
 	mu sync.Mutex
-	// queue is the priority queue for session healthchecks. Sessions with lower nextCheck rank higher in the queue.
+	// queue is the priority queue for session health checks. Sessions with lower nextCheck rank higher in the queue.
 	queue hcHeap
-	// interval is the average interval between two healthchecks on a session.
+	// interval is the average interval between two health checks on a session.
 	interval time.Duration
-	// workers is the number of concurrent healthcheck workers.
+	// workers is the number of concurrent health check workers.
 	workers int
-	// waitWorkers waits for all healthcheck workers to exit
+	// waitWorkers waits for all health check workers to exit
 	waitWorkers sync.WaitGroup
 	// pool is the underlying session pool.
 	pool *Pool
@@ -128,7 +109,7 @@ func (hc *healthChecker) scheduledHCLocked(s *session) {
 	// The next healthcheck will be scheduled after [interval*0.5, interval*1.5) nanoseconds.
 	nsFromNow := rand.Int63n(int64(hc.interval)) + int64(hc.interval)/2
 	s.setNextCheck(time.Now().Add(time.Duration(nsFromNow)))
-	if hi := s.getHcIndex(); hi != -1 {
+	if hi := s.getHCIndex(); hi != -1 {
 		// Session is still being tracked by healthcheck workers.
 		heap.Fix(&hc.queue, hi)
 	}
