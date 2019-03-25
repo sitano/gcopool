@@ -18,7 +18,7 @@ Modifications:
 - 2019, @john.koepi/@sitano extract pool
 */
 
-package spanner
+package gcopool
 
 import (
 	"sync"
@@ -57,7 +57,7 @@ func (sh *sessionHandle) getID() string {
 }
 
 // getClient gets the Cloud Spanner RPC resource associated with the session ID in sessionHandle.
-func (sh *sessionHandle) getClient() sppb.SpannerClient {
+func (sh *sessionHandle) getClient() Resource {
 	sh.mu.Lock()
 	defer sh.mu.Unlock()
 	if sh.session == nil {
@@ -66,22 +66,13 @@ func (sh *sessionHandle) getClient() sppb.SpannerClient {
 	return sh.session.res
 }
 
-// getMetadata returns the metadata associated with the session in sessionHandle.
-func (sh *sessionHandle) getMetadata() metadata.MD {
-	sh.mu.Lock()
-	defer sh.mu.Unlock()
-	if sh.session == nil {
-		return nil
-	}
-	return sh.session.md
-}
-
 // getTransactionID returns the transaction id in the session if available.
-func (sh *sessionHandle) getTransactionID() transactionID {
+func (sh *sessionHandle) getTransactionID() TXID {
 	sh.mu.Lock()
 	defer sh.mu.Unlock()
 	if sh.session == nil {
-		return nil
+		var def TXID
+		return def
 	}
 	return sh.session.tx
 }

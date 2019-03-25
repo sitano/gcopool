@@ -15,6 +15,19 @@ limitations under the License.
 
 */
 
-package spanner
+package gcopool
 
-type Resource interface{}
+import "context"
+
+type TXID bool
+
+type Resource interface{
+	// Ping verifies if the resource(ID) is still alive.
+	Ping(context.Context, string) error
+
+	// Prepare prepare resource(ID) for write
+	Prepare(context.Context, string) (TXID, error)
+
+	// Destroy releases a resource
+	Destroy(context.Context, string) error
+}

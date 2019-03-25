@@ -18,11 +18,12 @@ Modifications:
 - 2019, @john.koepi/@sitano extract pool, removed spanner specific code
 */
 
-package spanner
+package gcopool
 
 import (
 	"container/list"
 	"context"
+	"errors"
 	"sync"
 	"time"
 )
@@ -107,15 +108,9 @@ func (p *Pool) close() {
 	}
 }
 
-// errInvalidSessionPool returns error for using an invalid session pool.
-func errInvalidSessionPool() error {
-	return spannerErrorf(codes.InvalidArgument, "invalid session pool")
-}
-
-// errGetSessionTimeout returns error for context timeout during Pool.take().
-func errGetSessionTimeout() error {
-	return spannerErrorf(codes.Canceled, "timeout / context canceled during getting session")
-}
+var ErrInvalidSessionPool = errors.New("invalid session pool")
+// ErrGetSessionTimeout returns error for context timeout during Pool.take().
+var ErrGetSessionTimeout = errors.New("timeout / context canceled during getting session")
 
 // shouldPrepareWrite returns true if we should prepare more sessions for write.
 func (p *Pool) shouldPrepareWrite() bool {
@@ -137,12 +132,12 @@ func (p *Pool) createSession(ctx context.Context) (*session, error) {
 		p.mayGetSession = make(chan struct{})
 		p.mu.Unlock()
 	}
-	sc, err := p.createSession()
+	sc, err := p.CreateResource(ctx)
 	if err != nil {
 		doneCreate(false)
 		return nil, err
 	}
-	s, err := createSession(ctx, sc, p.db, p.Labels, p.md)
+	s, err := createSession(ctx, sc, p.Labels)
 	if err != nil {
 		doneCreate(false)
 		// Should return error directly because of the previous retries on CreateResource RPC.
@@ -154,24 +149,13 @@ func (p *Pool) createSession(ctx context.Context) (*session, error) {
 	return s, nil
 }
 
-func createSession(ctx context.Context, sc sppb.SpannerClient, db string, labels map[string]string, md metadata.MD) (*session, error) {
-	var s *session
-	err := runRetryable(ctx, func(ctx context.Context) error {
-		sid, e := sc.CreateSession(ctx, &sppb.CreateSessionRequest{
-			Database: db,
-			Session:  &sppb.Session{Labels: labels},
-		})
-		if e != nil {
-			return e
-		}
-		// If no error, construct the new session.
-		s = &session{valid: true, res: sc, id: sid.Name, createTime: time.Now(), md: md}
-		return nil
-	})
-	if err != nil {
-		return nil, err
+func createSession(ctx context.Context, res Resource, labels map[string]string) (*session, error) {
+	return &session{
+		valid:      true,
+		res:        res,
+		id:         sid.Name,
+		createTime: time.Now(),
 	}
-	return s, nil
 }
 
 func (p *Pool) isHealthy(s *session) bool {

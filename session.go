@@ -18,7 +18,7 @@ Modifications:
 - 2019, @john.koepi/@sitano extract pool
 */
 
-package spanner
+package gcopool
 
 import (
 	"container/list"
@@ -28,6 +28,8 @@ import (
 	"sync"
 	"time"
 )
+
+const pingTimeout = time.Second
 
 // session wraps a resource session.
 type session struct {
@@ -53,8 +55,8 @@ type session struct {
 	nextCheck time.Time
 	// checkingHelath is true if currently this session is being processed by health checker. Must be modified under health checker lock.
 	checkingHealth bool
-	// tx is true if the session has been prepared for write.
-	tx bool
+	// tx if the session has been prepared for write.
+	tx TXID
 }
 
 // isValid returns true if the session is still valid for use.
@@ -65,7 +67,7 @@ func (s *session) isValid() bool {
 }
 
 // isWritePrepared returns true if the session is prepared for write.
-func (s *session) isWritePrepared() bool {
+func (s *session) isWritePrepared() TXID {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.tx
@@ -81,16 +83,15 @@ func (s *session) String() string {
 
 // ping verifies if the session is still alive in Cloud Spanner.
 func (s *session) ping() error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
 	defer cancel()
-	return runRetryable(ctx, func(ctx context.Context) error {
-		_, err := s.res.GetSession(contextWithOutgoingMetadata(ctx, s.pool.md), &sppb.GetSessionRequest{Name: s.getID()}) // s.getID is safe even when s is invalid.
-		return err
+	return RunRetryable(ctx, func(ctx context.Context) error {
+		return s.res.Ping(ctx, s.getID()) // s.getID is safe even when s is invalid.
 	})
 }
 
-// setHcIndex atomically sets the session's index in the healthcheck queue and returns the old index.
-func (s *session) setHcIndex(i int) int {
+// setHCIndex atomically sets the session's index in the healthcheck queue and returns the old index.
+func (s *session) setHCIndex(i int) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	oi := s.hcIndex
@@ -124,7 +125,7 @@ func (s *session) setNextCheck(t time.Time) {
 }
 
 // setTransaction sets the transaction status (read / write) in the session
-func (s *session) setTransactionID(tx bool) {
+func (s *session) setTransactionID(tx TXID) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.tx = tx
@@ -183,11 +184,10 @@ func (s *session) destroy(isExpire bool) bool {
 }
 
 func (s *session) delete(ctx context.Context) {
-	// Ignore the error returned by runRetryable because even if we fail to explicitly destroy the session,
+	// Ignore the error returned by RunRetryable because even if we fail to explicitly destroy the session,
 	// it will be eventually garbage collected by Cloud Spanner.
-	err := runRetryable(ctx, func(ctx context.Context) error {
-		_, e := s.res.DeleteSession(ctx, &sppb.DeleteSessionRequest{Name: s.getID()})
-		return e
+	err := RunRetryable(ctx, func(ctx context.Context) error {
+		return s.res.Destroy(ctx, s.getID())
 	})
 	if err != nil {
 		log.Printf("Failed to delete session %v. Error: %v", s.getID(), err)
@@ -199,7 +199,7 @@ func (s *session) prepareForWrite(ctx context.Context) error {
 	if s.isWritePrepared() {
 		return nil
 	}
-	tx, err := beginTransaction(ctx, s.getID(), s.res)
+	tx, err := s.res.Prepare(ctx, s.getID())
 	if err != nil {
 		return err
 	}

@@ -18,7 +18,7 @@ Modifications:
 - 2019, @john.koepi/@sitano extract pool, removed spanner specific code
 */
 
-package spanner
+package gcopool
 
 import "container/heap"
 
@@ -42,14 +42,14 @@ func (h hcHeap) Less(i, j int) bool {
 // Swap implements heap.Interface.Swap.
 func (h hcHeap) Swap(i, j int) {
 	h.sessions[i], h.sessions[j] = h.sessions[j], h.sessions[i]
-	h.sessions[i].setHcIndex(i)
-	h.sessions[j].setHcIndex(j)
+	h.sessions[i].setHCIndex(i)
+	h.sessions[j].setHCIndex(j)
 }
 
 // Push implements heap.Interface.Push.
 func (h *hcHeap) Push(s interface{}) {
 	ns := s.(*session)
-	ns.setHcIndex(len(h.sessions))
+	ns.setHCIndex(len(h.sessions))
 	h.sessions = append(h.sessions, ns)
 }
 
@@ -59,7 +59,7 @@ func (h *hcHeap) Pop() interface{} {
 	n := len(old)
 	s := old[n-1]
 	h.sessions = old[:n-1]
-	s.setHcIndex(-1)
+	s.setHCIndex(-1)
 	return s
 }
 

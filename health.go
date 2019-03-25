@@ -18,7 +18,7 @@ Modifications:
 - 2019, @john.koepi/@sitano extract pool, removed spanner specific code
 */
 
-package spanner
+package gcopool
 
 import (
 	"container/heap"
@@ -134,7 +134,7 @@ func (hc *healthChecker) register(s *session) {
 func (hc *healthChecker) unregister(s *session) {
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
-	oi := s.setHcIndex(-1)
+	oi := s.setHCIndex(-1)
 	if oi >= 0 {
 		heap.Remove(&hc.queue, oi)
 	}

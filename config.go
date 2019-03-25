@@ -18,9 +18,10 @@ Modifications:
 - 2019, @john.koepi/@sitano extract pool, change config and errors
 */
 
-package spanner
+package gcopool
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -29,7 +30,7 @@ import (
 // Config stores configurations of a session pool.
 type Config struct {
 	// CreateResource is the caller supplied method for getting a session, this makes session pool able to use pooling.
-	CreateResource func() (Resource, error)
+	CreateResource func(context.Context) (Resource, error)
 	// MaxOpened is the maximum number of opened sessions allowed by the session
 	// pool. Defaults to NumChannels * 100. If the resource tries to open a session and
 	// there are already MaxOpened sessions, it will block until one becomes
