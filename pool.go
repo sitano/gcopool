@@ -29,6 +29,7 @@ import (
 )
 
 var ErrInvalidSessionPool = errors.New("invalid session pool")
+
 // ErrGetSessionTimeout returns error for context timeout during Pool.take().
 var ErrGetSessionTimeout = errors.New("timeout / context canceled during getting session")
 

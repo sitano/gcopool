@@ -17,7 +17,10 @@ limitations under the License.
 
 package gcopool
 
-import "context"
+import (
+	"context"
+	"errors"
+)
 
 type TXID bool
 
@@ -34,3 +37,8 @@ type Resource interface {
 	// Destroy releases a resource
 	Destroy(context.Context, string) error
 }
+
+// ErrUnavailable is an error which can be returned by the ping
+// implementation to report that the resource is unavailable
+// any more and it must be removed from the pool.
+var ErrUnavailable = errors.New("session is unavailable")

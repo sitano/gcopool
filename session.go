@@ -30,7 +30,7 @@ import (
 )
 
 const pingTimeout = time.Second
-const destroyTimeout = 15*time.Second
+const destroyTimeout = 15 * time.Second
 
 // session wraps a resource session.
 type session struct {

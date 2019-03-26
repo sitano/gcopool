@@ -85,4 +85,3 @@ func isRetryable(err error) bool {
 func extractRetryDelay(_ error) (time.Duration, bool) {
 	return 0, false
 }
-

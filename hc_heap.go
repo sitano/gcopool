@@ -62,4 +62,3 @@ func (h *hcHeap) Pop() interface{} {
 	s.setHCIndex(-1)
 	return s
 }
-

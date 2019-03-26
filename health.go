@@ -25,7 +25,6 @@ import (
 	"context"
 	"log"
 	"math/rand"
-	"strings"
 	"sync"
 	"time"
 )
@@ -216,11 +215,11 @@ func (hc *healthChecker) worker(i int) {
 		ws := getNextForTx()
 		if ws != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			err := ws.prepareForWrite(contextWithOutgoingMetadata(ctx, hc.pool.md))
+			err := ws.prepareForWrite(ctx)
 			cancel()
 			if err != nil {
 				// Skip handling prepare error, session can be prepared in next cycle
-				log.Printf("Failed to prepare session, error: %v", toSpannerError(err))
+				log.Printf("Failed to prepare session, error: %v", err)
 			}
 			hc.pool.recycle(ws)
 			hc.pool.mu.Lock()
@@ -326,13 +325,13 @@ func (hc *healthChecker) replenishPool(ctx context.Context, sessionsToKeep uint6
 			err error
 		)
 		if s, err = p.createSession(ctx); err != nil {
-			log.Printf("Failed to create session, error: %v", toSpannerError(err))
+			log.Printf("Failed to create session, error: %v", err)
 			continue
 		}
 		if shouldPrepareWrite {
 			if err = s.prepareForWrite(ctx); err != nil {
 				p.recycle(s)
-				log.Printf("Failed to prepare session, error: %v", toSpannerError(err))
+				log.Printf("Failed to prepare session, error: %v", err)
 				continue
 			}
 		}
@@ -373,16 +372,7 @@ func (hc *healthChecker) shrinkPool(ctx context.Context, sessionsToKeep uint64) 
 
 // shouldDropSession returns true if a particular error leads to the removal of a session
 func shouldDropSession(err error) bool {
-	if err == nil {
-		return false
-	}
-	// If a Cloud Spanner can no longer locate the session (for example, if session is garbage collected), then caller
-	// should not try to return the session back into the session pool.
-	// TODO: once gRPC can return auxiliary error information, stop parsing the error message.
-	if ErrCode(err) == codes.NotFound && strings.Contains(ErrDesc(err), "Session not found") {
-		return true
-	}
-	return false
+	return err == ErrUnavailable
 }
 
 // maxUint64 returns the maximum of two uint64
