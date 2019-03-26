@@ -59,7 +59,7 @@ type Config struct {
 }
 
 // Validate verifies that the Config is good for use.
-func (spc *Config) Validate() error {
+func (spc Config) Validate() error {
 	if spc.CreateResource == nil {
 		return errNoSessionGetter()
 	}

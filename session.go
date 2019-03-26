@@ -30,6 +30,7 @@ import (
 )
 
 const pingTimeout = time.Second
+const destroyTimeout = 15*time.Second
 
 // session wraps a resource session.
 type session struct {
@@ -81,7 +82,7 @@ func (s *session) String() string {
 		s.id, s.hcIndex, s.idleList, s.valid, s.createTime, s.nextCheck)
 }
 
-// ping verifies if the session is still alive in Cloud Spanner.
+// ping verifies if the session is still alive.
 func (s *session) ping() error {
 	ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
 	defer cancel()
@@ -131,7 +132,7 @@ func (s *session) setTransactionID(tx TXID) {
 	s.tx = tx
 }
 
-// getID returns the session ID which uniquely identifies the session in Cloud Spanner.
+// getID returns the session ID which uniquely identifies the session.
 func (s *session) getID() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -176,8 +177,8 @@ func (s *session) destroy(isExpire bool) bool {
 	}
 	// Unregister s from healthcheck queue.
 	s.pool.hc.unregister(s)
-	// Remove s from Cloud Spanner service.
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	// Remove s from service.
+	ctx, cancel := context.WithTimeout(context.Background(), destroyTimeout)
 	defer cancel()
 	s.delete(ctx)
 	return true
@@ -185,7 +186,7 @@ func (s *session) destroy(isExpire bool) bool {
 
 func (s *session) delete(ctx context.Context) {
 	// Ignore the error returned by RunRetryable because even if we fail to explicitly destroy the session,
-	// it will be eventually garbage collected by Cloud Spanner.
+	// it will be eventually garbage collected.
 	err := RunRetryable(ctx, func(ctx context.Context) error {
 		return s.res.Destroy(ctx, s.getID())
 	})

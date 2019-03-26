@@ -68,7 +68,7 @@ func RunRetryable(ctx context.Context, f func(context.Context) error) error {
 	}
 }
 
-// errContextCanceled returns *spanner.Error for canceled context.
+// errContextCanceled returns an error for canceled context.
 func errContextCanceled(ctx context.Context) error {
 	if ctx.Err() == context.DeadlineExceeded {
 		return context.DeadlineExceeded

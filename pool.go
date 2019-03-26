@@ -28,7 +28,11 @@ import (
 	"time"
 )
 
-// Pool creates and caches Cloud Spanner sessions.
+var ErrInvalidSessionPool = errors.New("invalid session pool")
+// ErrGetSessionTimeout returns error for context timeout during Pool.take().
+var ErrGetSessionTimeout = errors.New("timeout / context canceled during getting session")
+
+// Pool creates and caches sessions.
 type Pool struct {
 	// mu protects Pool from concurrent access.
 	mu sync.Mutex
@@ -108,10 +112,6 @@ func (p *Pool) close() {
 	}
 }
 
-var ErrInvalidSessionPool = errors.New("invalid session pool")
-// ErrGetSessionTimeout returns error for context timeout during Pool.take().
-var ErrGetSessionTimeout = errors.New("timeout / context canceled during getting session")
-
 // shouldPrepareWrite returns true if we should prepare more sessions for write.
 func (p *Pool) shouldPrepareWrite() bool {
 	return float64(p.numOpened)*p.WriteSessions > float64(p.idleWriteList.Len()+int(p.prepareReqs))
@@ -153,9 +153,9 @@ func createSession(ctx context.Context, res Resource, labels map[string]string) 
 	return &session{
 		valid:      true,
 		res:        res,
-		id:         sid.Name,
+		id:         res.ID(),
 		createTime: time.Now(),
-	}
+	}, nil
 }
 
 func (p *Pool) isHealthy(s *session) bool {
@@ -175,7 +175,6 @@ func (p *Pool) isHealthy(s *session) bool {
 // Session returned by take should be used for read operations.
 func (p *Pool) take(ctx context.Context) (*sessionHandle, error) {
 	statsPrintf(ctx, nil, "Acquiring a read-only session")
-	ctx = contextWithOutgoingMetadata(ctx, p.md)
 	for {
 		var (
 			s   *session
@@ -185,7 +184,7 @@ func (p *Pool) take(ctx context.Context) (*sessionHandle, error) {
 		p.mu.Lock()
 		if !p.valid {
 			p.mu.Unlock()
-			return nil, errInvalidSessionPool()
+			return nil, ErrInvalidSessionPool
 		}
 		if p.idleList.Len() > 0 {
 			// Idle sessions are available, get one from the top of the idle list.
@@ -216,7 +215,7 @@ func (p *Pool) take(ctx context.Context) (*sessionHandle, error) {
 			select {
 			case <-ctx.Done():
 				statsPrintf(ctx, nil, "Context done waiting for session")
-				return nil, errGetSessionTimeout()
+				return nil, ErrGetSessionTimeout
 			case <-mayGetSession:
 			}
 			continue
@@ -228,7 +227,7 @@ func (p *Pool) take(ctx context.Context) (*sessionHandle, error) {
 		p.mu.Unlock()
 		if s, err = p.createSession(ctx); err != nil {
 			statsPrintf(ctx, nil, "Error creating session: %v", err)
-			return nil, toSpannerError(err)
+			return nil, err
 		}
 		statsPrintf(ctx, map[string]interface{}{"sessionID": s.getID()},
 			"Created session")
@@ -240,7 +239,6 @@ func (p *Pool) take(ctx context.Context) (*sessionHandle, error) {
 // Session returned should be used for read write transactions.
 func (p *Pool) takeWriteSession(ctx context.Context) (*sessionHandle, error) {
 	statsPrintf(ctx, nil, "Acquiring a read-write session")
-	ctx = contextWithOutgoingMetadata(ctx, p.md)
 	for {
 		var (
 			s   *session
@@ -250,7 +248,7 @@ func (p *Pool) takeWriteSession(ctx context.Context) (*sessionHandle, error) {
 		p.mu.Lock()
 		if !p.valid {
 			p.mu.Unlock()
-			return nil, errInvalidSessionPool()
+			return nil, ErrInvalidSessionPool
 		}
 		if p.idleWriteList.Len() > 0 {
 			// Idle sessions are available, get one from the top of the idle list.
@@ -278,7 +276,7 @@ func (p *Pool) takeWriteSession(ctx context.Context) (*sessionHandle, error) {
 				select {
 				case <-ctx.Done():
 					statsPrintf(ctx, nil, "Context done waiting for session")
-					return nil, errGetSessionTimeout()
+					return nil, ErrGetSessionTimeout
 				case <-mayGetSession:
 				}
 				continue
@@ -291,7 +289,7 @@ func (p *Pool) takeWriteSession(ctx context.Context) (*sessionHandle, error) {
 			p.mu.Unlock()
 			if s, err = p.createSession(ctx); err != nil {
 				statsPrintf(ctx, nil, "Error creating session: %v", err)
-				return nil, toSpannerError(err)
+				return nil, err
 			}
 			statsPrintf(ctx, map[string]interface{}{"sessionID": s.getID()},
 				"Created session")
@@ -301,7 +299,7 @@ func (p *Pool) takeWriteSession(ctx context.Context) (*sessionHandle, error) {
 				s.recycle()
 				statsPrintf(ctx, map[string]interface{}{"sessionID": s.getID()},
 					"Error preparing session for write")
-				return nil, toSpannerError(err)
+				return nil, err
 			}
 		}
 		return &sessionHandle{session: s}, nil

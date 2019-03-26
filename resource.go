@@ -21,7 +21,10 @@ import "context"
 
 type TXID bool
 
-type Resource interface{
+type Resource interface {
+	// Unique immutable id per pool
+	ID() string
+
 	// Ping verifies if the resource(ID) is still alive.
 	Ping(context.Context, string) error
 

@@ -1,4 +1,4 @@
-PKGS := github.com/sitano/statuspkg
+PKGS := github.com/sitano/gcopool
 SRCDIRS := $(shell go list -f '{{.Dir}}' $(PKGS))
 GO := go
 
