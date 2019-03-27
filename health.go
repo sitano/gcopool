@@ -77,7 +77,7 @@ func newHealthChecker(interval time.Duration, workers int, sampleInterval time.D
 	return hc
 }
 
-// close closes the healthChecker and waits for all healthcheck workers to exit.
+// Close closes the healthChecker and waits for all healthcheck workers to exit.
 func (hc *healthChecker) close() {
 	hc.mu.Lock()
 	hc.maintainerCancel()
@@ -149,7 +149,7 @@ func (hc *healthChecker) markDone(s *session) {
 // healthCheck checks the health of the session and pings it if needed.
 func (hc *healthChecker) healthCheck(s *session) {
 	defer hc.markDone(s)
-	if !s.pool.isValid() {
+	if !s.pool.IsValid() {
 		// Session pool is closed, perform a garbage collection.
 		s.destroy(false)
 		return

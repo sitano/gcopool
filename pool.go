@@ -80,8 +80,8 @@ func New(config Config) (*Pool, error) {
 	return pool, nil
 }
 
-// isValid checks if the session pool is still valid.
-func (p *Pool) isValid() bool {
+// IsValid checks if the session pool is still valid.
+func (p *Pool) IsValid() bool {
 	if p == nil {
 		return false
 	}
@@ -90,8 +90,8 @@ func (p *Pool) isValid() bool {
 	return p.valid
 }
 
-// close marks the session pool as closed.
-func (p *Pool) close() {
+// Close marks the session pool as closed.
+func (p *Pool) Close() {
 	if p == nil {
 		return
 	}
@@ -159,6 +159,7 @@ func createSession(ctx context.Context, res Resource, labels map[string]string) 
 	}, nil
 }
 
+// TODO: must be public
 func (p *Pool) isHealthy(s *session) bool {
 	if s.getNextCheck().Add(2 * p.hc.getInterval()).Before(time.Now()) {
 		// TODO: figure out if we need to schedule a new healthcheck worker here.
@@ -174,6 +175,7 @@ func (p *Pool) isHealthy(s *session) bool {
 
 // take returns a cached session if there are available ones; if there isn't any, it tries to allocate a new one.
 // Session returned by take should be used for read operations.
+// TODO: must be public
 func (p *Pool) take(ctx context.Context) (*sessionHandle, error) {
 	statsPrintf(ctx, nil, "Acquiring a read-only session")
 	for {
@@ -238,6 +240,7 @@ func (p *Pool) take(ctx context.Context) (*sessionHandle, error) {
 
 // takeWriteSession returns a write prepared cached session if there are available ones; if there isn't any, it tries to allocate a new one.
 // Session returned should be used for read write transactions.
+// TODO: must be public
 func (p *Pool) takeWriteSession(ctx context.Context) (*sessionHandle, error) {
 	statsPrintf(ctx, nil, "Acquiring a read-write session")
 	for {
@@ -308,6 +311,7 @@ func (p *Pool) takeWriteSession(ctx context.Context) (*sessionHandle, error) {
 }
 
 // recycle puts session s back to the session pool's idle list, it returns true if the session pool successfully recycles session s.
+// TODO: must be public
 func (p *Pool) recycle(s *session) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -329,6 +333,7 @@ func (p *Pool) recycle(s *session) bool {
 
 // remove atomically removes session s from the session pool and invalidates s.
 // If isExpire == true, the removal is triggered by session expiration and in such cases, only idle sessions can be removed.
+// TODO: must be public
 func (p *Pool) remove(s *session, isExpire bool) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()

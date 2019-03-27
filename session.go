@@ -60,7 +60,7 @@ type session struct {
 	tx TXID
 }
 
-// isValid returns true if the session is still valid for use.
+// IsValid returns true if the session is still valid for use.
 func (s *session) isValid() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
