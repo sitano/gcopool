@@ -23,11 +23,13 @@ import (
 	"go.opencensus.io/trace"
 )
 
+//lint:ignore U1000 we will use them later
 func startSpan(ctx context.Context, name string) context.Context {
 	ctx, _ = trace.StartSpan(ctx, name)
 	return ctx
 }
 
+//lint:ignore U1000 we will use them later
 func endSpan(ctx context.Context, err error) {
 	span := trace.FromContext(ctx)
 	if err != nil {

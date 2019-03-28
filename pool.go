@@ -18,6 +18,11 @@ Modifications:
 - 2019, @john.koepi/@sitano extract pool, removed spanner specific code
 */
 
+// Package gcopool implements a thread safe resource pool to manage
+// and reuse something related to the sessions or connections. The
+// implementation is derived from the Google Spanner client. It
+// supports max, min, idle lists, read/write resources, health checking
+// and tracing.
 package gcopool
 
 import (

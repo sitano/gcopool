@@ -13,7 +13,7 @@ func TestNew(t *testing.T) {
 		id := 0
 		pool, err := New(Config{
 			CreateResource: func(ctx context.Context) (res Resource, err error) {
-				id ++
+				id++
 				return NewR(strconv.Itoa(id)), nil
 			},
 		})
@@ -23,7 +23,7 @@ func TestNew(t *testing.T) {
 		if !pool.IsValid() {
 			t.Error("pool must be valid")
 		}
-		for i := 0; i < 100; i ++ {
+		for i := 0; i < 100; i++ {
 			h, err := pool.Take(context.Background())
 			if err != nil {
 				t.Error(err)
@@ -34,7 +34,7 @@ func TestNew(t *testing.T) {
 			}
 			h.Recycle()
 		}
-		for i := 0; i < 100; i ++ {
+		for i := 0; i < 100; i++ {
 			h, err := pool.Take(context.Background())
 			if err != nil {
 				t.Error(err)
@@ -52,7 +52,7 @@ func TestNew(t *testing.T) {
 		pool, err := New(Config{
 			MaxOpened: 2,
 			CreateResource: func(ctx context.Context) (res Resource, err error) {
-				id ++
+				id++
 				return NewR(strconv.Itoa(id)), nil
 			},
 		})
@@ -62,8 +62,8 @@ func TestNew(t *testing.T) {
 		if !pool.IsValid() {
 			t.Error("pool must be valid")
 		}
-		for i := 0; i < 3; i ++ {
-			ctx, cancel := context.WithTimeout(context.Background(), 100 * time.Millisecond)
+		for i := 0; i < 3; i++ {
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			_, err := pool.Take(ctx)
 			cancel()
 			if err != nil {

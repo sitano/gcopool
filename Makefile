@@ -2,7 +2,7 @@ PKGS := github.com/sitano/gcopool
 SRCDIRS := $(shell go list -f '{{.Dir}}' $(PKGS))
 GO := go
 
-check: test vet gofmt unconvert staticcheck ineffassign unparam
+check: test vet gofmt unconvert staticcheck ineffassign
 
 test:
 	env GO111MODULE=on $(GO) test $(PKGS)
