@@ -30,9 +30,10 @@ import (
 // Config stores configurations of a session pool.
 type Config struct {
 	// CreateResource is the caller supplied method for getting a session, this makes session pool able to use pooling.
+	// It must assign a unique ID to a resource across the pool lifetime.
 	CreateResource func(context.Context) (Resource, error)
 	// MaxOpened is the maximum number of opened sessions allowed by the session
-	// pool. Defaults to NumChannels * 100. If the resource tries to open a session and
+	// pool. If the resource tries to open a session and
 	// there are already MaxOpened sessions, it will block until one becomes
 	// available or the context passed to the resource method is canceled or times out.
 	MaxOpened uint64

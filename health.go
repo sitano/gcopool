@@ -34,7 +34,7 @@ type healthChecker struct {
 	// mu protects concurrent access to hcQueue.
 	mu sync.Mutex
 	// queue is the priority queue for session health checks. Sessions with lower nextCheck rank higher in the queue.
-	queue hcHeap
+	queue sheap
 	// interval is the average interval between two health checks on a session.
 	interval time.Duration
 	// workers is the number of concurrent health check workers.
@@ -155,7 +155,7 @@ func (hc *healthChecker) healthCheck(s *session) {
 		return
 	}
 	if err := s.ping(); shouldDropSession(err) {
-		// Ping failed, destroy the session.
+		// Ping failed, Destroy the session.
 		s.destroy(false)
 	}
 }
@@ -362,7 +362,7 @@ func (hc *healthChecker) shrinkPool(ctx context.Context, sessionsToKeep uint64) 
 		}
 		p.mu.Unlock()
 		if s != nil {
-			// destroy session as expire.
+			// Destroy session as expire.
 			s.destroy(true)
 		} else {
 			break

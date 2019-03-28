@@ -54,7 +54,7 @@ type session struct {
 	idleList *list.Element
 	// nextCheck is the timestamp of next scheduled healthcheck of the session. It is maintained by the global health checker.
 	nextCheck time.Time
-	// checkingHelath is true if currently this session is being processed by health checker. Must be modified under health checker lock.
+	// checkingHealth is true if currently this session is being processed by health checker. Must be modified under health checker lock.
 	checkingHealth bool
 	// tx if the session has been prepared for write.
 	tx TXID
@@ -87,7 +87,7 @@ func (s *session) ping() error {
 	ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
 	defer cancel()
 	return RunRetryable(ctx, func(ctx context.Context) error {
-		return s.res.Ping(ctx, s.getID()) // s.getID is safe even when s is invalid.
+		return s.res.Ping(ctx) // s.GetID is safe even when s is invalid.
 	})
 }
 
@@ -132,7 +132,7 @@ func (s *session) setTransactionID(tx TXID) {
 	s.tx = tx
 }
 
-// getID returns the session ID which uniquely identifies the session.
+// GetID returns the session ID which uniquely identifies the session.
 func (s *session) getID() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -175,7 +175,7 @@ func (s *session) destroy(isExpire bool) bool {
 	if !s.pool.remove(s, isExpire) {
 		return false
 	}
-	// Unregister s from healthcheck queue.
+	// Unregister s from health check queue.
 	s.pool.hc.unregister(s)
 	// Remove s from service.
 	ctx, cancel := context.WithTimeout(context.Background(), destroyTimeout)
@@ -185,10 +185,10 @@ func (s *session) destroy(isExpire bool) bool {
 }
 
 func (s *session) delete(ctx context.Context) {
-	// Ignore the error returned by RunRetryable because even if we fail to explicitly destroy the session,
+	// Ignore the error returned by RunRetryable because even if we fail to explicitly Destroy the session,
 	// it will be eventually garbage collected.
 	err := RunRetryable(ctx, func(ctx context.Context) error {
-		return s.res.Destroy(ctx, s.getID())
+		return s.res.Destroy(ctx)
 	})
 	if err != nil {
 		log.Printf("Failed to delete session %v. Error: %v", s.getID(), err)
@@ -200,7 +200,7 @@ func (s *session) prepareForWrite(ctx context.Context) error {
 	if s.isWritePrepared() {
 		return nil
 	}
-	tx, err := s.res.Prepare(ctx, s.getID())
+	tx, err := s.res.Prepare(ctx)
 	if err != nil {
 		return err
 	}

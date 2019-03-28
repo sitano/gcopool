@@ -22,39 +22,39 @@ package gcopool
 
 import "container/heap"
 
-var _ heap.Interface = (*hcHeap)(nil)
+var _ heap.Interface = (*sheap)(nil)
 
-// hcHeap implements heap.Interface. It is used to create the priority queue for session healthchecks.
-type hcHeap struct {
+// sheap implements heap.Interface. It is used to create the priority queue for session health checks.
+type sheap struct {
 	sessions []*session
 }
 
 // Len implements heap.Interface.Len.
-func (h hcHeap) Len() int {
+func (h sheap) Len() int {
 	return len(h.sessions)
 }
 
 // Less implements heap.Interface.Less.
-func (h hcHeap) Less(i, j int) bool {
+func (h sheap) Less(i, j int) bool {
 	return h.sessions[i].getNextCheck().Before(h.sessions[j].getNextCheck())
 }
 
 // Swap implements heap.Interface.Swap.
-func (h hcHeap) Swap(i, j int) {
+func (h sheap) Swap(i, j int) {
 	h.sessions[i], h.sessions[j] = h.sessions[j], h.sessions[i]
 	h.sessions[i].setHCIndex(i)
 	h.sessions[j].setHCIndex(j)
 }
 
 // Push implements heap.Interface.Push.
-func (h *hcHeap) Push(s interface{}) {
+func (h *sheap) Push(s interface{}) {
 	ns := s.(*session)
 	ns.setHCIndex(len(h.sessions))
 	h.sessions = append(h.sessions, ns)
 }
 
 // Pop implements heap.Interface.Pop.
-func (h *hcHeap) Pop() interface{} {
+func (h *sheap) Pop() interface{} {
 	old := h.sessions
 	n := len(old)
 	s := old[n-1]

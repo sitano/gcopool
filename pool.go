@@ -30,7 +30,7 @@ import (
 
 var ErrInvalidSessionPool = errors.New("invalid session pool")
 
-// ErrGetSessionTimeout returns error for context timeout during Pool.take().
+// ErrGetSessionTimeout returns error for context timeout during Pool.Take().
 var ErrGetSessionTimeout = errors.New("timeout / context canceled during getting session")
 
 // Pool creates and caches sessions.
@@ -103,7 +103,7 @@ func (p *Pool) Close() {
 	p.valid = false
 	p.mu.Unlock()
 	p.hc.close()
-	// destroy all the sessions
+	// Destroy all the sessions
 	p.hc.mu.Lock()
 	allSessions := make([]*session, len(p.hc.queue.sessions))
 	copy(allSessions, p.hc.queue.sessions)
@@ -159,10 +159,17 @@ func createSession(ctx context.Context, res Resource, labels map[string]string) 
 	}, nil
 }
 
-// TODO: must be public
+func (p *Pool) IsHealthy(h *Handle) bool {
+	s := h.session()
+	if s == nil {
+		return false
+	}
+	return p.isHealthy(s)
+}
+
 func (p *Pool) isHealthy(s *session) bool {
 	if s.getNextCheck().Add(2 * p.hc.getInterval()).Before(time.Now()) {
-		// TODO: figure out if we need to schedule a new healthcheck worker here.
+		// TODO: figure out if we need to schedule a new health check worker here.
 		if err := s.ping(); shouldDropSession(err) {
 			// The session is already bad, continue to fetch/create a new one.
 			s.destroy(false)
@@ -173,10 +180,9 @@ func (p *Pool) isHealthy(s *session) bool {
 	return true
 }
 
-// take returns a cached session if there are available ones; if there isn't any, it tries to allocate a new one.
-// Session returned by take should be used for read operations.
-// TODO: must be public
-func (p *Pool) take(ctx context.Context) (*sessionHandle, error) {
+// Take returns a cached session if there are available ones; if there isn't any, it tries to allocate a new one.
+// Session returned by Take should be used for read operations.
+func (p *Pool) Take(ctx context.Context) (*Handle, error) {
 	statsPrintf(ctx, nil, "Acquiring a read-only session")
 	for {
 		var (
@@ -202,13 +208,13 @@ func (p *Pool) take(ctx context.Context) (*sessionHandle, error) {
 		if s != nil {
 			s.setIdleList(nil)
 			p.mu.Unlock()
-			// From here, session is no longer in idle list, so healthcheck workers won't destroy it.
+			// From here, session is no longer in idle list, so healthcheck workers won't Destroy it.
 			// If healthcheck workers failed to schedule healthcheck for the session timely, do the check here.
 			// Because session check is still much cheaper than session creation, they should be reused as much as possible.
 			if !p.isHealthy(s) {
 				continue
 			}
-			return &sessionHandle{session: s}, nil
+			return &Handle{s: s}, nil
 		}
 		// Idle list is empty, block if session pool has reached max session creation concurrency or max number of open sessions.
 		if (p.MaxOpened > 0 && p.numOpened >= p.MaxOpened) || (p.MaxBurst > 0 && p.createReqs >= p.MaxBurst) {
@@ -234,14 +240,13 @@ func (p *Pool) take(ctx context.Context) (*sessionHandle, error) {
 		}
 		statsPrintf(ctx, map[string]interface{}{"sessionID": s.getID()},
 			"Created session")
-		return &sessionHandle{session: s}, nil
+		return &Handle{s: s}, nil
 	}
 }
 
-// takeWriteSession returns a write prepared cached session if there are available ones; if there isn't any, it tries to allocate a new one.
+// TakeWriteSession returns a write prepared cached session if there are available ones; if there isn't any, it tries to allocate a new one.
 // Session returned should be used for read write transactions.
-// TODO: must be public
-func (p *Pool) takeWriteSession(ctx context.Context) (*sessionHandle, error) {
+func (p *Pool) TakeWriteSession(ctx context.Context) (*Handle, error) {
 	statsPrintf(ctx, nil, "Acquiring a read-write session")
 	for {
 		var (
@@ -265,7 +270,7 @@ func (p *Pool) takeWriteSession(ctx context.Context) (*sessionHandle, error) {
 		if s != nil {
 			s.setIdleList(nil)
 			p.mu.Unlock()
-			// From here, session is no longer in idle list, so healthcheck workers won't destroy it.
+			// From here, session is no longer in idle list, so healthcheck workers won't Destroy it.
 			// If healthcheck workers failed to schedule healthcheck for the session timely, do the check here.
 			// Because session check is still much cheaper than session creation, they should be reused as much as possible.
 			if !p.isHealthy(s) {
@@ -306,12 +311,11 @@ func (p *Pool) takeWriteSession(ctx context.Context) (*sessionHandle, error) {
 				return nil, err
 			}
 		}
-		return &sessionHandle{session: s}, nil
+		return &Handle{s: s}, nil
 	}
 }
 
-// recycle puts session s back to the session pool's idle list, it returns true if the session pool successfully recycles session s.
-// TODO: must be public
+// Recycle puts session s back to the session pool's idle list, it returns true if the session pool successfully recycles session s.
 func (p *Pool) recycle(s *session) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -333,7 +337,6 @@ func (p *Pool) recycle(s *session) bool {
 
 // remove atomically removes session s from the session pool and invalidates s.
 // If isExpire == true, the removal is triggered by session expiration and in such cases, only idle sessions can be removed.
-// TODO: must be public
 func (p *Pool) remove(s *session, isExpire bool) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()

@@ -28,14 +28,14 @@ type Resource interface {
 	// Unique immutable id per pool
 	ID() string
 
-	// Ping verifies if the resource(ID) is still alive.
-	Ping(context.Context, string) error
+	// Ping verifies if the resource is still alive.
+	Ping(context.Context) error
 
-	// Prepare prepare resource(ID) for write
-	Prepare(context.Context, string) (TXID, error)
+	// Prepare prepare resource for write
+	Prepare(context.Context) (TXID, error)
 
 	// Destroy releases a resource
-	Destroy(context.Context, string) error
+	Destroy(context.Context) error
 }
 
 // ErrUnavailable is an error which can be returned by the ping
