@@ -42,3 +42,7 @@ type Resource interface {
 // implementation to report that the resource is unavailable
 // any more and it must be removed from the pool.
 var ErrUnavailable = errors.New("session is unavailable")
+
+// XXX: extract Ping into separate HealthCheck interface. Def ping impl must return nil.
+// XXX: extract Prepare into separate ReadWrite interface with set/get tx id (i{})
+// XXX: extract Handle into separate Hook interface with handle event acquire, release events
