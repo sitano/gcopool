@@ -56,8 +56,6 @@ type session struct {
 	nextCheck time.Time
 	// checkingHealth is true if currently this session is being processed by health checker. Must be modified under health checker lock.
 	checkingHealth bool
-	// tx if the session has been prepared for write.
-	tx TXID
 }
 
 // IsValid returns true if the session is still valid for use.
@@ -68,10 +66,11 @@ func (s *session) isValid() bool {
 }
 
 // isWritePrepared returns true if the session is prepared for write.
-func (s *session) isWritePrepared() TXID {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.tx
+func (s *session) isWritePrepared() bool {
+	if tx, ok := s.res.(TX); ok {
+		return tx.Prepared()
+	}
+	return false
 }
 
 // String implements fmt.Stringer for session.
@@ -84,11 +83,15 @@ func (s *session) String() string {
 
 // ping verifies if the session is still alive.
 func (s *session) ping() error {
-	ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
-	defer cancel()
-	return RunRetryable(ctx, func(ctx context.Context) error {
-		return s.res.Ping(ctx) // s.GetID is safe even when s is invalid.
-	})
+	p, ok := s.res.(Heartbeat)
+	if ok {
+		ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
+		defer cancel()
+		return RunRetryable(ctx, func(ctx context.Context) error {
+			return p.Ping(ctx)
+		})
+	}
+	return nil
 }
 
 // setHCIndex atomically sets the session's index in the healthcheck queue and returns the old index.
@@ -125,13 +128,6 @@ func (s *session) setNextCheck(t time.Time) {
 	s.nextCheck = t
 }
 
-// setTransaction sets the transaction status (read / write) in the session
-func (s *session) setTransactionID(tx TXID) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.tx = tx
-}
-
 // GetID returns the session ID which uniquely identifies the session.
 func (s *session) getID() string {
 	s.mu.Lock()
@@ -161,8 +157,24 @@ func (s *session) getNextCheck() time.Time {
 }
 
 // recycle turns the session back to its home session pool.
-func (s *session) recycle() {
-	s.setTransactionID(false)
+// if commit is true recycle tries to commit a tx if it is active
+// or abort otherwise. if commit or abort fail it destroys a session.
+func (s *session) recycle(commit bool) {
+	_ = s.signalEvent(context.Background(), EventRelease, nil)
+
+	tx, ok := s.res.(TX)
+	if ok {
+		if err := RunRetryable(context.Background(), func(ctx context.Context) error {
+			if !commit {
+				return tx.Abort(ctx)
+			}
+			return tx.Commit(ctx)
+		}); err != nil {
+			s.destroy(false)
+			return
+		}
+	}
+
 	if !s.pool.recycle(s) {
 		// s is rejected by its home session pool because it expired and the session pool currently has enough open sessions.
 		s.destroy(false)
@@ -187,9 +199,7 @@ func (s *session) destroy(isExpire bool) bool {
 func (s *session) delete(ctx context.Context) {
 	// Ignore the error returned by RunRetryable because even if we fail to explicitly Destroy the session,
 	// it will be eventually garbage collected.
-	err := RunRetryable(ctx, func(ctx context.Context) error {
-		return s.res.Destroy(ctx)
-	})
+	err := s.processEvent(ctx, EventDestroy, nil)
 	if err != nil {
 		log.Printf("Failed to delete session %v. Error: %v", s.getID(), err)
 	}
@@ -200,10 +210,34 @@ func (s *session) prepareForWrite(ctx context.Context) error {
 	if s.isWritePrepared() {
 		return nil
 	}
-	tx, err := s.res.Prepare(ctx)
-	if err != nil {
-		return err
+	tx, ok := s.res.(TX)
+	if !ok {
+		return ErrTXUnsupported
 	}
-	s.setTransactionID(tx)
+	return tx.Prepare(ctx)
+}
+
+// beginTransaction prepares the session for write if it is not already in that state.
+func (s *session) beginTransaction(ctx context.Context) error {
+	tx, ok := s.res.(TX)
+	if !ok {
+		return ErrTXUnsupported
+	}
+	return tx.Begin(ctx)
+}
+
+func (s *session) signalEvent(ctx context.Context, code EventCode, obj interface{}) error {
+	if h, ok := s.res.(Hook); ok {
+		return h.Handle(ctx, code, obj)
+	}
 	return nil
+}
+
+func (s *session) processEvent(ctx context.Context, code EventCode, obj interface{}) error {
+	return RunRetryable(ctx, func(ctx context.Context) error {
+		if h, ok := s.res.(Hook); ok {
+			return h.Handle(ctx, code, obj)
+		}
+		return nil
+	})
 }

@@ -245,6 +245,7 @@ func (p *Pool) Take(ctx context.Context) (*Handle, error) {
 		}
 		statsPrintf(ctx, map[string]interface{}{"sessionID": s.getID()},
 			"Created session")
+		_ = s.signalEvent(context.Background(), EventAcquire, nil)
 		return &Handle{s: s}, nil
 	}
 }
@@ -310,12 +311,19 @@ func (p *Pool) TakeWriteSession(ctx context.Context) (*Handle, error) {
 		}
 		if !s.isWritePrepared() {
 			if err = s.prepareForWrite(ctx); err != nil {
-				s.recycle()
+				s.recycle(false)
 				statsPrintf(ctx, map[string]interface{}{"sessionID": s.getID()},
 					"Error preparing session for write")
 				return nil, err
 			}
 		}
+		if err = s.beginTransaction(ctx); err != nil {
+			s.recycle(false)
+			statsPrintf(ctx, map[string]interface{}{"sessionID": s.getID()},
+				"Error preparing session for write")
+			return nil, err
+		}
+		_ = s.signalEvent(context.Background(), EventAcquire, nil)
 		return &Handle{s: s}, nil
 	}
 }

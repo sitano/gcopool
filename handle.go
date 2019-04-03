@@ -40,7 +40,7 @@ func (h *Handle) Recycle() {
 		// Handle has already been recycled.
 		return
 	}
-	h.s.recycle()
+	h.s.recycle(true)
 	h.s = nil
 }
 
@@ -65,17 +65,6 @@ func (h *Handle) GetResource() Resource {
 		return nil
 	}
 	return h.s.res
-}
-
-// GetTransactionID returns the transaction id in the session if available.
-func (h *Handle) GetTransactionID() TXID {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if h.s == nil {
-		var def TXID
-		return def
-	}
-	return h.s.tx
 }
 
 // Destroy destroys the inner session object. It is safe to call Destroy multiple times and only the first call would attempt to

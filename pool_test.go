@@ -2,7 +2,6 @@ package gcopool
 
 import (
 	"context"
-	"errors"
 	"strconv"
 	"testing"
 	"time"
@@ -80,28 +79,10 @@ func TestNew(t *testing.T) {
 
 type res struct {
 	id string
-	tx TXID
 }
 
 func (r res) ID() string {
 	return r.id
-}
-
-func (r *res) Ping(context.Context) error {
-	return nil
-}
-
-func (r *res) Prepare(context.Context) (TXID, error) {
-	r.tx = true
-	return r.tx, nil
-}
-
-func (r *res) Destroy(context.Context) error {
-	if r.id == "" {
-		return errors.New("already destroyed")
-	}
-	r.id = ""
-	return nil
 }
 
 func NewR(id string) Resource {
